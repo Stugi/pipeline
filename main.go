@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -45,16 +45,24 @@ import (
 //Готовый код присылайте на проверку ментором в поле ниже. Если совсем не понимаете, с чего начать и как решать задачу,
 //загляните в следующий юнит, а потом возвращайтесь со своим решением, чтобы отправить его ментору.
 
+// Задание такое: измените код так, чтобы каждое действие в программе пайплайна
+// (включая каждую его стадию) добавлялось в журнал логов (проще говоря, в логи).
+// В качестве потока, в который нужно направлять эти логи, выберите консоль.
+
 const bufferSize = 10
 const flushInterval = 1 * time.Second
 
+var logger = log.New(os.Stdout, "", log.LstdFlags)
+
 // фильтрации отрицательных чисел (не пропускать отрицательные числа)
 func filterNegative(num int) bool {
+	logger.Printf("Проверка числа на отрицательность: %d\n", num)
 	return num >= 0
 }
 
 // фильтрации чисел кратных 3 (не пропускать такие числа)
 func filterMultiplesOf3(num int) bool {
+	logger.Printf("Проверка числа на кратность 3: %d\n", num)
 	return num%3 != 0 && num != 0
 }
 
@@ -69,6 +77,7 @@ type BufferRing struct {
 
 // Конструктор кольцевого буфера
 func NewBufferRing(size int) *BufferRing {
+	logger.Printf("Инициализация буфера с размером %d\n", size)
 	return &BufferRing{
 		data:  make([]int, size),
 		head:  0,
@@ -80,6 +89,7 @@ func NewBufferRing(size int) *BufferRing {
 
 // Добавление элемента в кольцевой буфер
 func (b *BufferRing) Push(v int) {
+	logger.Printf("Добавление числа в буфер: %d\n", v)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.count < len(b.data) {
@@ -91,6 +101,7 @@ func (b *BufferRing) Push(v int) {
 
 // Получение элементов из кольцевого буфера
 func (b *BufferRing) Get() []int {
+	logger.Printf("Получение данных из буфера\n")
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	data := make([]int, b.count)
@@ -104,6 +115,7 @@ func (b *BufferRing) Get() []int {
 
 // Источник данных для конвейера
 func dataSource() chan int {
+	logger.Printf("Инициализация источника данных\n")
 	ch := make(chan int)
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
@@ -111,7 +123,7 @@ func dataSource() chan int {
 			text := scanner.Text()
 			num, err := strconv.Atoi(text)
 			if err != nil {
-				fmt.Println("Ошибка ввода. Повторите попытку.")
+				logger.Printf("Некорректное значение: %s\n", text)
 				continue
 			}
 			ch <- num
@@ -123,27 +135,31 @@ func dataSource() chan int {
 
 // Потребитель данных конвейера
 func dataConsumer(ch chan int, buffer *BufferRing) {
+	logger.Printf("Инициализация потребителя данных\n")
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case num, ok := <-ch:
 			if !ok {
+				logger.Printf("Источник данных закрыт\n")
 				return
 			}
+			logger.Printf("Получено значение: %d\n", num)
 			if filterNegative(num) && filterMultiplesOf3(num) {
 				buffer.Push(num)
 			}
 		case <-ticker.C:
 			data := buffer.Get()
 			for _, num := range data {
-				fmt.Printf("Получены данные: %d\n", num)
+				logger.Printf("Получены данные: %d\n", num)
 			}
 		}
 	}
 }
 
 func main() {
+	logger.Printf("Инициализация пайплайна\n")
 	buffer := NewBufferRing(bufferSize)
 	ch := dataSource()
 	dataConsumer(ch, buffer)
